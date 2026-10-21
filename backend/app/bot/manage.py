@@ -4,7 +4,7 @@ import asyncio
 from aiogram import Bot
 from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
-from app.bot.dispatcher import create_dispatcher
+from app.bot.handlers import create_dispatcher
 from app.catalog import get_catalog
 from app.config import get_settings
 

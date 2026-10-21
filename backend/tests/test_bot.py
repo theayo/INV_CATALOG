@@ -4,7 +4,7 @@ from aiogram import Bot
 from aiogram.methods import SendMessage
 from aiogram.types import Message, Update
 
-from app.bot.dispatcher import create_dispatcher
+from app.bot.handlers import create_dispatcher
 from tests.fakes import FakeCatalog
 
 

@@ -4,11 +4,11 @@ from aiogram import Bot
 from aiogram.types import Update
 from fastapi import APIRouter, Depends, Header, HTTPException
 
-from app.bot.dispatcher import create_dispatcher
+from app.bot.handlers import create_dispatcher
 from app.catalog import Catalog, get_catalog
 from app.config import Settings, get_settings
 
-router = APIRouter()
+router = APIRouter(prefix="/api/telegram", tags=["telegram"])
 
 
 @router.post("/webhook")

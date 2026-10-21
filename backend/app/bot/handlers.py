@@ -2,7 +2,7 @@ import asyncio
 from io import BytesIO
 from secrets import compare_digest
 
-from aiogram import Bot, F, Router
+from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import (
     CallbackQuery,
@@ -14,6 +14,8 @@ from aiogram.types import (
 
 from app.catalog import Catalog, CatalogError
 from app.config import Settings
+
+PHOTO_PROMPT = "Пришлите одно фото с названием товара в подписи (до 200 символов)."
 
 
 def menu(settings: Settings, admin: bool = False) -> InlineKeyboardMarkup:
@@ -36,17 +38,17 @@ async def user_role(message: Message, catalog: Catalog) -> str:
     return await asyncio.to_thread(catalog.database.ensure_user, message.from_user.id)
 
 
-def create_router() -> Router:
-    router = Router(name="catalog")
-    router.message.filter(F.chat.type == "private", F.from_user)
-    router.callback_query.filter(F.message.chat.type == "private")
+def create_dispatcher() -> Dispatcher:
+    dispatcher = Dispatcher(disable_fsm=True)
+    dispatcher.message.filter(F.chat.type == "private", F.from_user)
+    dispatcher.callback_query.filter(F.message.chat.type == "private")
 
-    @router.message(CommandStart())
+    @dispatcher.message(CommandStart())
     async def start(message: Message, catalog: Catalog, settings: Settings):
         role = await user_role(message, catalog)
         await message.answer("У меня есть товар", reply_markup=menu(settings, role == "admin"))
 
-    @router.message(Command("admin"))
+    @dispatcher.message(Command("admin"))
     async def admin(message: Message, command: CommandObject, catalog: Catalog, settings: Settings):
         await user_role(message, catalog)
         expected = settings.demo_admin_code.get_secret_value()
@@ -62,33 +64,31 @@ def create_router() -> Router:
             reply_markup=menu(settings, admin=True),
         )
 
-    @router.message(Command("user"))
+    @dispatcher.message(Command("user"))
     async def user(message: Message, catalog: Catalog, settings: Settings):
         await asyncio.to_thread(catalog.database.set_role, message.from_user.id, "user")
         await message.answer(
             "Вы обычный пользователь. Добавление товаров недоступно.", reply_markup=menu(settings)
         )
 
-    @router.message(Command("create"))
-    @router.message(F.text == "Создать товар")
+    @dispatcher.message(Command("create"))
+    @dispatcher.message(F.text == "Создать товар")
     async def create(message: Message, catalog: Catalog):
         if await user_role(message, catalog) != "admin":
             await message.answer("Создание товаров доступно только администратору.")
             return
-        await message.answer("Пришлите одно фото с названием товара в подписи (до 200 символов).")
+        await message.answer(PHOTO_PROMPT)
 
-    @router.callback_query(F.data == "create_product")
+    @dispatcher.callback_query(F.data == "create_product")
     async def create_callback(query: CallbackQuery, catalog: Catalog):
         role = await asyncio.to_thread(catalog.database.ensure_user, query.from_user.id)
         if role != "admin":
             await query.answer("Создание доступно только администратору.", show_alert=True)
             return
         await query.answer()
-        await query.message.answer(
-            "Пришлите одно фото с названием товара в подписи (до 200 символов)."
-        )
+        await query.message.answer(PHOTO_PROMPT)
 
-    @router.message(F.photo)
+    @dispatcher.message(F.photo)
     async def photo(message: Message, bot: Bot, catalog: Catalog, settings: Settings):
         if await user_role(message, catalog) != "admin":
             await message.answer("Создание товаров доступно только администратору.")
@@ -121,7 +121,7 @@ def create_router() -> Router:
             f"Товар «{product.title}» сохранён.", reply_markup=menu(settings, admin=True)
         )
 
-    @router.message()
+    @dispatcher.message()
     async def fallback(message: Message, catalog: Catalog, settings: Settings):
         role = await user_role(message, catalog)
         text = "У меня есть товар"
@@ -129,4 +129,4 @@ def create_router() -> Router:
             text += "\nДля создания пришлите фото с названием в подписи одним сообщением."
         await message.answer(text, reply_markup=menu(settings, role == "admin"))
 
-    return router
+    return dispatcher

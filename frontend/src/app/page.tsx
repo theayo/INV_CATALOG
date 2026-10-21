@@ -4,12 +4,11 @@ import Refresh from "./refresh";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  let products: Product[] = [];
-  let failed = false;
+  let products: Product[] | null;
   try {
     products = await getProducts();
   } catch {
-    failed = true;
+    products = null;
   }
 
   return (
@@ -22,7 +21,7 @@ export default async function Home() {
         <Refresh />
       </header>
 
-      {failed ? (
+      {products === null ? (
         <section className="notice" role="alert">
           <h2>Не удалось загрузить каталог</h2>
           <p>Попробуйте обновить страницу чуть позже.</p>

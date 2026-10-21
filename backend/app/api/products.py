@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app.api.auth import telegram_user_id
 from app.catalog import Catalog, CatalogError, Product, get_catalog
 
-router = APIRouter()
+router = APIRouter(prefix="/api/products", tags=["products"])
 
 
 class ProductResponse(BaseModel):

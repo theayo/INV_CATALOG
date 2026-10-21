@@ -7,7 +7,9 @@ from minio.error import S3Error
 from urllib3.exceptions import HTTPError
 
 from app import __version__
-from app.api.router import api_router
+from app.api.health import router as health_router
+from app.api.products import router as products_router
+from app.api.telegram import router as telegram_router
 from app.catalog import CatalogError
 from app.config import get_settings
 
@@ -15,7 +17,9 @@ from app.config import get_settings
 def create_app() -> FastAPI:
     settings = get_settings()
     application = FastAPI(title=settings.app_name, version=__version__)
-    application.include_router(api_router)
+    application.include_router(health_router)
+    application.include_router(products_router)
+    application.include_router(telegram_router)
 
     @application.exception_handler(CatalogError)
     def catalog_error(_request: Request, error: CatalogError):

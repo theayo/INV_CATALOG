@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 from typing import Literal
 
 import psycopg
@@ -13,10 +12,8 @@ class Database:
     def __init__(self, settings: Settings):
         self.url = settings.database_url.get_secret_value()
 
-    @contextmanager
     def connect(self):
-        with psycopg.connect(self.url, row_factory=dict_row, connect_timeout=5) as connection:
-            yield connection
+        return psycopg.connect(self.url, row_factory=dict_row, connect_timeout=5)
 
     def ensure_user(self, telegram_id: int) -> Role:
         with self.connect() as connection:
