@@ -1,0 +1,99 @@
+name: invix
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-invix}
+      POSTGRES_USER: ${POSTGRES_USER:-invix}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-invix_dev_password}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    build:
+      context: ./infra/minio
+      target: server
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-invix_local}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-invix_dev_minio_password}
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    build:
+      context: ./infra/minio
+      target: client
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-invix_local}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-invix_dev_minio_password}
+      MINIO_BUCKET: ${MINIO_BUCKET:-product-photos}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" && mc ready local; do
+          sleep 2
+        done
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-invix}:${POSTGRES_PASSWORD:-invix_dev_password}@postgres:5432/${POSTGRES_DB:-invix}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-invix_local}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-invix_dev_minio_password}
+      MINIO_BUCKET: ${MINIO_BUCKET:-product-photos}
+      MINIO_SECURE: "false"
+      WEB_APP_URL: ${WEB_APP_URL:-http://localhost:3000}
+      BOT_TOKEN: ${BOT_TOKEN:-}
+      DEMO_ADMIN_CODE: ${DEMO_ADMIN_CODE:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      API_BASE_URL: http://backend:8000
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  minio_data:

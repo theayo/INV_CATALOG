@@ -1,0 +1,106 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      docker:
+        description: "Also build and check the Docker stack"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      COMPOSE_PARALLEL_LIMIT: "1"
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: "0.12.17"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Check backend
+        working-directory: backend
+        run: |
+          uv sync --locked
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pytest -q
+
+      - name: Check frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm run build
+
+  containers:
+    if: github.event_name == 'workflow_dispatch' && inputs.docker
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_PARALLEL_LIMIT: "1"
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Build and start containers
+        run: |
+          docker compose config --quiet
+          docker compose up --build -d --wait --wait-timeout 120
+          docker compose exec -T backend python -m app.db.migrate
+
+      - name: Check HTTP and infrastructure
+        run: |
+          curl --fail --silent --show-error http://localhost:8000/health
+          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2 --output /dev/null http://localhost:3000
+          docker compose exec -T backend python - <<'PY'
+          import psycopg
+          from minio import Minio
+          from app.config import get_settings
+
+          settings = get_settings()
+          with psycopg.connect(settings.database_url.get_secret_value()) as connection:
+              assert connection.execute("SELECT 1").fetchone() == (1,)
+
+          storage = Minio(
+              settings.minio_endpoint,
+              access_key=settings.minio_access_key,
+              secret_key=settings.minio_secret_key.get_secret_value(),
+              secure=settings.minio_secure,
+          )
+          assert storage.bucket_exists(settings.minio_bucket)
+          print("PostgreSQL and MinIO are ready")
+          PY
+
+      - name: Container logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --tail 100
+
+      - name: Stop test containers
+        if: always()
+        run: docker compose down --volumes --remove-orphans
