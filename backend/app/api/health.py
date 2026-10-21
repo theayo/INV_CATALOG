@@ -13,5 +13,4 @@ class HealthResponse(BaseModel):
 
 @router.get("", response_model=HealthResponse)
 def health() -> HealthResponse:
-    """Check that the API process is responding."""
     return HealthResponse()

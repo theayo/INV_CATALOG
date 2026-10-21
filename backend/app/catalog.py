@@ -87,7 +87,6 @@ class Catalog:
             raise CatalogError("Название должно содержать от 1 до 200 символов.")
 
         with self.database.connect() as connection:
-            # This row lock serializes uploads, retries and /user for the same sender.
             user = connection.execute(
                 "SELECT role FROM users WHERE telegram_id = %s FOR UPDATE", (telegram_id,)
             ).fetchone()
@@ -117,7 +116,6 @@ class Catalog:
                 except Exception:
                     logger.exception("Could not remove an image after a failed insert")
                 raise
-        # Do not delete the image on an ambiguous COMMIT failure: the row may exist.
         return Product.model_validate(row)
 
 

@@ -27,6 +27,5 @@ async def webhook(
     ):
         raise HTTPException(403, "Неверный секрет webhook.")
     async with Bot(token=token) as bot:
-        # Finish the work before returning: serverless workers may stop after a response.
         await create_dispatcher().feed_update(bot, update, catalog=catalog, settings=settings)
     return {"ok": True}

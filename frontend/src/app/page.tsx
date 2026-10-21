@@ -36,8 +36,6 @@ export default async function Home() {
         <ul className="products" aria-label="Товары">
           {products.map((product) => (
             <li key={product.id} className="product">
-              {/* Images are streamed from private MinIO through our API. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`/images/${product.id}`}
                 alt={product.title}

@@ -15,7 +15,6 @@ class Database:
 
     @contextmanager
     def connect(self):
-        # A connection per operation also works with Neon's pooled endpoint.
         with psycopg.connect(self.url, row_factory=dict_row, connect_timeout=5) as connection:
             yield connection
 

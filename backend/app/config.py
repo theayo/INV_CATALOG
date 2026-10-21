@@ -1,5 +1,3 @@
-"""Application configuration, loaded without contacting external services."""
-
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal

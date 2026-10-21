@@ -38,7 +38,6 @@ async def test_full_demo_flow(settings, photo):
             if caption is not None:
                 payload["caption"] = caption
         update = Update.model_validate({"update_id": message_id, "message": payload})
-        # A new dispatcher each time checks that no dialog state is needed between instances.
         await create_dispatcher().feed_update(bot, update, catalog=catalog, settings=settings)
         return [
             call.args[1] for call in session.call_args_list if isinstance(call.args[1], SendMessage)
